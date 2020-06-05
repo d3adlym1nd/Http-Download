@@ -3,8 +3,6 @@
 #include<string>
 #include<vector>
 #include<cstring>
-#include<csignal>
-#include<cstdlib>
 #include<unistd.h>
 
 #include<sys/types.h>
