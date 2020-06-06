@@ -3,8 +3,8 @@
 #include<string>
 #include<vector>
 #include<cstring>
-#include<csignal>
-#include<cstdlib>
+//#include<csignal>
+//#include<cstdlib>
 #include<unistd.h>
 
 #include<sys/types.h>
@@ -211,7 +211,7 @@ bool Downloader::Download(const char* cUrl){
 				cBuffer[iBytesReaded] = '\0';
 				//procede to check and follow all redirection
 				strTmpResponse = cBuffer;
-				if(strTmpResponse.find(std::string("HTTP/1.1 200 ")) != std::string::npos){
+				if(strTmpResponse.find("HTTP/1.1 200 ") != std::string::npos){
 					//ok proceed to download
 					memcpy(cFileBuffer, cBuffer, iBytesReaded);
 					iLocation = std::string(cBuffer).find("Content-Length: ");
@@ -294,7 +294,7 @@ bool Downloader::Download(const char* cUrl){
 							}
 						}
 					}
-				} else if(strTmpResponse.find(std::string("HTTP/1.1 301 ")) != std::string::npos){
+				} else if(strTmpResponse.find("HTTP/1.1 301 ") != std::string::npos){
 					//follow redirection
 					iLocation = std::string(cBuffer).find("Location: ");
 					if(iLocation != std::string::npos){
