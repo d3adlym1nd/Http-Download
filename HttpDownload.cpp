@@ -3,8 +3,11 @@
 #include<string>
 #include<vector>
 #include<cstring>
+<<<<<<< HEAD
 //#include<csignal>
 //#include<cstdlib>
+=======
+>>>>>>> 61abaa4e52ecfe2827b4eeebe1dadc5d5aa2d8f9
 #include<unistd.h>
 
 #include<sys/types.h>
