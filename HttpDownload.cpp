@@ -85,6 +85,7 @@ int Downloader::InitSocket(const char* cHostname, const char* cPort){
 	memset(&strctAd, 0, sizeof(strctAd));
 	strctAd.ai_family = AF_UNSPEC;
 	strctAd.ai_socktype = SOCK_STREAM;
+	strctAd.ai_protocol = IPPROTO_TCP;
 	int iRet = getaddrinfo(cHostname, cPort, &strctAd, &strctServer);
 	if(iRet != 0){
 		std::cout<<"getaddrinfo error: "<<gai_strerror(iRet)<<'\n';
@@ -128,7 +129,7 @@ bool Downloader::Download(const char* cUrl){
 	std::string strTmpFileName = vcUrl[vcUrl.size()-1], strTmpResponse = "", strTmp = "";
 	std::ofstream sFile;
 	
-	SSL *ssl;
+	SSL *ssl = nullptr;
 	
 	if(vcUrl[0] == "https:"){
 		isSSL = true;
@@ -303,8 +304,9 @@ bool Downloader::Download(const char* cUrl){
 							if(sckSocket){
 								close(sckSocket);
 							}
-							if(isSSL){
+							if(ssl != nullptr){
 								SSL_free(ssl);
+								ssl = nullptr;
 							}
 							strTmp = std::string(cBuffer).substr(iLocation +10, iNLocation - iLocation - 10);
 							std::cout<<"Redirected to "<<strTmp<<'\n';
@@ -390,6 +392,7 @@ bool Downloader::Download(const char* cUrl){
 	if(isSSL){
 		if(ssl){
 			SSL_free(ssl);
+			ssl = nullptr
 		}
 	}
 	return bFlag;
