@@ -123,6 +123,7 @@ bool Downloader::Download(const char* cUrl){
 	unsigned long int uliFileSize = 0, uliResponseTotalBytes = 0, uliBytesSoFar = 0;
 	int iErr = 0, iBytesWrited = 0, iLen = 0, iBytesReaded = 0;
 	char cBuffer[2049], cFileBuffer[2049], cHostname[128], cTmp[128], cRemotePort[7];
+	memset(cRemotePort, 0, 7);
 	char *cToken = nullptr;
 	
 	std::size_t iLocation = 0, iNLocation = 0, HeaderEnd = 0;
@@ -212,7 +213,7 @@ bool Downloader::Download(const char* cUrl){
 				cBuffer[iBytesReaded] = '\0';
 				//procede to check and follow all redirection
 				strTmpResponse = cBuffer;
-				if(strTmpResponse.find("HTTP/1.1 200 ") != std::string::npos){
+				if(strTmpResponse.find("HTTP/1.1 200 ") != std::string::npos || strTmpResponse.find("HTTP/1.0 200 ") != std::string::npos){
 					//ok proceed to download
 					memcpy(cFileBuffer, cBuffer, iBytesReaded);
 					iLocation = std::string(cBuffer).find("Content-Length: ");
@@ -231,8 +232,6 @@ bool Downloader::Download(const char* cUrl){
 						bFlag = false;
 						break;
 					}
-					
-					//procede here to download an save file
 					//save previous part of file that has been downloaded
 					sFile.open(strTmpFileName, std::ios::binary);
 					if(!sFile.is_open()){
@@ -249,6 +248,11 @@ bool Downloader::Download(const char* cUrl){
 					}
 					sFile.write(&cFileBuffer[HeaderEnd], iBytesReaded - HeaderEnd);
 					uliBytesSoFar = iBytesReaded;
+					//Check if already download all data in first recv
+					if(uliBytesSoFar >= uliResponseTotalBytes){
+						bFlag = true;
+						break;
+					}
 					while(1){
 						if(isSSL){
 							iBytesReaded = SSL_read(ssl, cFileBuffer, 1024);
@@ -386,14 +390,17 @@ bool Downloader::Download(const char* cUrl){
 	}
 	
 	releaseSSL:
+	if(sFile.is_open()){
+		sFile.close();
+	}
 	if(sckSocket){
 		close(sckSocket);
+		sckSocket = -1;
 	}
-	if(isSSL){
-		if(ssl){
-			SSL_free(ssl);
-			ssl = nullptr
-		}
+	if(ssl){
+		SSL_shutdown(ssl);
+		SSL_free(ssl);
+		ssl = nullptr;
 	}
 	return bFlag;
 }
