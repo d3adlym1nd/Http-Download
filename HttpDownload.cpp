@@ -19,11 +19,11 @@
 
 extern int errno;
 
-#define Error() std::cout<<"Error ["<<errno<<"] "<<strerror(errno)<<'\n'
+#define error() std::cout<<"Error ["<<errno<<"] "<<strerror(errno)<<'\n'
 
 class Downloader{
 	private:
-		int sckSocket;
+		int sckSocket = -1;
 	public:
 		bool isSSL = false;
 		bool bFlag = false;
@@ -94,12 +94,12 @@ int Downloader::InitSocket(const char* cHostname, const char* cPort){
 	for(strctP = strctServer; strctP != nullptr; strctP = strctP->ai_next){
 		if((sckSocket = socket(strctP->ai_family, strctP->ai_socktype, strctP->ai_protocol)) == -1){
 			std::cout<<"Socker error\n";
-			Error();
+			error();
 			continue;
 		}
 		if(connect(sckSocket, strctP->ai_addr, strctP->ai_addrlen) == -1){
 			std::cout<<"Error connecting\n";
-			Error();
+			error();
 			continue;
 		}
 		break;
@@ -116,7 +116,9 @@ bool Downloader::Download(const char* cUrl){
 	std::vector<std::string> vcUrl, vcUrl2;
 	SplitString(cUrl, '/', vcUrl, 50); //increase this for larger subdirectories or url
 	if(vcUrl.size() < 2){
+		#ifdef _DEBUG
 		std::cout<<"Unable to parse url "<<cUrl<<'\n';
+		#endif
 		return false;
 	}
 	
@@ -168,12 +170,6 @@ bool Downloader::Download(const char* cUrl){
 		}
 	}
 	
-	if(isSSL){
-		SSL_library_init();
-		SSLeay_add_ssl_algorithms();
-	}
-	
-	
 	while(1){ //loop until receive 200 ok to procede download
 		if(InitSocket(cHostname, cRemotePort) == -1){
 			bFlag = false;
@@ -183,7 +179,7 @@ bool Downloader::Download(const char* cUrl){
 			ssl = SSL_new(SSL_CTX_new(TLS_method()));
 			if(ssl == nullptr){
 				std::cout<<"Error creating ssl object\n";
-				ERR_print_errors_fp(stderr);
+				error();
 				bFlag = false;
 				break;
 			}
@@ -191,8 +187,7 @@ bool Downloader::Download(const char* cUrl){
 			iErr = SSL_connect(ssl);
 			if(iErr == -1){
 				std::cout<<"Error establishing SSL connection\n";
-				Error();
-				ERR_print_errors_fp(stderr);
+				error();
 				bFlag = false;
 				break;
 			}
@@ -211,20 +206,26 @@ bool Downloader::Download(const char* cUrl){
 			
 			if(iBytesReaded > 0){
 				cBuffer[iBytesReaded] = '\0';
-				//procede to check and follow all redirection
 				strTmpResponse = cBuffer;
 				if(strTmpResponse.find("HTTP/1.1 200 ") != std::string::npos || strTmpResponse.find("HTTP/1.0 200 ") != std::string::npos){
-					//ok proceed to download
 					memcpy(cFileBuffer, cBuffer, iBytesReaded);
-					iLocation = std::string(cBuffer).find("Content-Length: ");
+					iLocation = strTmpResponse.find("filename=");
 					if(iLocation != std::string::npos){
-						iNLocation = std::string(cBuffer).find('\r', iLocation);
-						HeaderEnd = std::string(cBuffer).find("\r\n\r\n") + 4;
+						iNLocation = strTmpResponse.find("\r", iLocation);
 						if(iNLocation != std::string::npos){
-							strTmp = std::string(cBuffer).substr(iLocation + 16, (iNLocation - iLocation) - 16);
-							uliFileSize = StrToint(strTmp.c_str());
-							uliResponseTotalBytes = uliFileSize + HeaderEnd;
-							std::cout<<"File size is "<<uliFileSize<<'\n';
+							strTmp = strTmpResponse.substr(iLocation +9, (iNLocation - iLocation) - 9);
+						}
+					}
+					if(uliFileSize == 0){
+						iLocation = strTmpResponse.find("Content-Length: ");
+						if(iLocation != std::string::npos){
+							iNLocation = strTmpResponse.find('\r', iLocation);
+							if(iNLocation != std::string::npos){
+								strTmp = strTmpResponse.substr(iLocation + 16, (iNLocation - iLocation) - 16);
+								uliFileSize = StrToint(strTmp.c_str());
+								uliResponseTotalBytes = uliFileSize + HeaderEnd;
+								std::cout<<"File size is "<<uliFileSize<<'\n';
+							}
 						}
 					}
 					if(uliFileSize == 0){
@@ -232,27 +233,25 @@ bool Downloader::Download(const char* cUrl){
 						bFlag = false;
 						break;
 					}
+					
 					//save previous part of file that has been downloaded
 					sFile.open(strTmpFileName, std::ios::binary);
 					if(!sFile.is_open()){
 						std::cout<<"Unable to open file "<<strTmpFileName<<"\nOpening dummy file /tmp/dowload.t3mp\n";
-						Error();
+						error();
 						sFile.open("/tmp/download.t3mp", std::ios::binary);
 						if(!sFile.is_open()){
 							std::cout<<"Unable to open dummy file\n";
-							Error();
+							error();
 							close(sckSocket);
+							sckSocket = -1;
 							bFlag = false;
 							break;
 						}
 					}
+					HeaderEnd = std::string(cBuffer).find("\r\n\r\n") + 4;
 					sFile.write(&cFileBuffer[HeaderEnd], iBytesReaded - HeaderEnd);
 					uliBytesSoFar = iBytesReaded;
-					//Check if already download all data in first recv
-					if(uliBytesSoFar >= uliResponseTotalBytes){
-						bFlag = true;
-						break;
-					}
 					while(1){
 						if(isSSL){
 							iBytesReaded = SSL_read(ssl, cFileBuffer, 1024);
@@ -276,13 +275,13 @@ bool Downloader::Download(const char* cUrl){
 										break;
 									case SSL_ERROR_ZERO_RETURN:
 										std::cout<<"SSL_ERROR_ZERO_RETURN\n";
-										Error();
+										error();
 										bFlag = false;
 										iErr = 1;
 										break;
 									case SSL_ERROR_WANT_READ:
 										std::cout<<"SSL_ERROR_WANT_READ\n";
-										Error();
+										error();
 										bFlag = false;
 										iErr = 1;
 										break;	
@@ -293,7 +292,7 @@ bool Downloader::Download(const char* cUrl){
 							}
 							if (iBytesReaded == -1) {
 								std::cout<<"Connection closed\n";
-								Error();
+								error();
 								bFlag = false;
 								goto releaseSSL;
 							}
@@ -301,16 +300,25 @@ bool Downloader::Download(const char* cUrl){
 					}
 				} else if(strTmpResponse.find("HTTP/1.1 301 ") != std::string::npos){
 					//follow redirection
+					iLocation = strTmpResponse.find("Content-Length: ");
+					if(iLocation != std::string::npos){
+						iNLocation = strTmpResponse.find('\r', iLocation);
+						if(iNLocation != std::string::npos){
+							strTmp = strTmpResponse.substr(iLocation + 16, (iNLocation - iLocation) - 16);
+							uliFileSize = StrToint(strTmp.c_str());
+							std::cout<<"File size is "<<uliFileSize<<'\n';
+						}
+					}
 					iLocation = std::string(cBuffer).find("Location: ");
 					if(iLocation != std::string::npos){
 						iNLocation = std::string(cBuffer).find('\r', iLocation);
 						if(iNLocation != std::string::npos){
 							if(sckSocket){
 								close(sckSocket);
+								sckSocket = -1;
 							}
-							if(ssl != nullptr){
+							if(isSSL){
 								SSL_free(ssl);
-								ssl = nullptr;
 							}
 							strTmp = std::string(cBuffer).substr(iLocation +10, iNLocation - iLocation - 10);
 							std::cout<<"Redirected to "<<strTmp<<'\n';
@@ -370,19 +378,21 @@ bool Downloader::Download(const char* cUrl){
 						break;
 					}
 				} else {
-					std::cout<<"Not handled response code\n"<<cBuffer<<'\n';
+					std::size_t pos = std::string(cBuffer).find("\r\n");
+					std::string strTmp = std::string(cBuffer).substr(0, pos);
+					std::cout<<"Not handled response code\n"<<strTmp<<'\n';
 					bFlag = false;
 					break;
 				}
 			} else {
 				std::cout<<"Got no response from server\n";
-				Error();
+				error();
 				bFlag = false;
 				break;
 			}
 		} else {
 			std::cout<<"Unable to send packet\n";
-			Error();
+			error();
 			bFlag = false;
 			break;
 		}
@@ -390,17 +400,14 @@ bool Downloader::Download(const char* cUrl){
 	}
 	
 	releaseSSL:
-	if(sFile.is_open()){
-		sFile.close();
-	}
 	if(sckSocket){
 		close(sckSocket);
 		sckSocket = -1;
 	}
-	if(ssl){
-		SSL_shutdown(ssl);
-		SSL_free(ssl);
-		ssl = nullptr;
+	if(isSSL){
+		if(ssl != nullptr){
+			SSL_free(ssl);
+		}
 	}
 	return bFlag;
 }

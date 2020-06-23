@@ -3,4 +3,4 @@
 Download files from HTTP(s) Servers
 
 ## How to use
-Simply create `Downloader` class object and pass the url to the funcion `Download`. It can also download files over Https, follow redirections and remote port can be specified on url, like: `https://www.somesite.com:8888/path/to/file`
+Simply create `Downloader` class object and pass the url to the funcion `Download`. It also follow redirections and remote port can be specified on url, like: `https://www.somesite.com:8888/path/to/file`
